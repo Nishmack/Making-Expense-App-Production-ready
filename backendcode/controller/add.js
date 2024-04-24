@@ -1,4 +1,6 @@
 const alldetails = require("../models/define");
+const userdb = require("../models/signup");
+const sequelize = require("../util/database");
 
 //adding new record into a database table using add method
 //first step:
@@ -6,6 +8,8 @@ const alldetails = require("../models/define");
 //we we make an http request(means when we click on submit button) forms fileds like expens,descript,categ values stored in an request.body
 
 exports.addexpense = async (req, res, next) => {
+  //A transaction is a way to group multiple database operations together in a single logical unit.
+  const t = await sequelize.transaction();
   try {
     const expens = req.body.expens;
     const descript = req.body.descript;
@@ -16,24 +20,60 @@ exports.addexpense = async (req, res, next) => {
     //Use the addexpense.create() method to create a new addexpense record in the database with the extracted values.
     //Await the completion of the create() method and assign the result to the data variable
 
-    const data = await alldetails.create({
-      expens: expens,
-      descript: descript,
-      categ: categ,
-      userId: req.user.id,
-      //when we make an post request url along with in headers we are passing token
-      //backend will recieves token and in the middleware we are dcrypting the token so we will get userId
-      //from the userId you will comes to know that who is logged in
-      //when we are adding the expenses what we have to do means in expense.create method just add the userId:req.user.id that's it
+    const data = await alldetails.create(
+      {
+        expens: expens,
+        descript: descript,
+        categ: categ,
+        userId: req.user.id,
+        //when we make an post request url along with in headers we are passing token
+        //backend will recieves token and in the middleware we are dcrypting the token so we will get userId
+        //from the userId you will comes to know that who is logged in
+        //when we are adding the expenses what we have to do means in expense.create method just add the userId:req.user.id that's it
+
+        //It allows you to ensure that either all the operations succeed (commit), or if any of them fail, all of them are rolled back (rollback),
+        //keeping the database in a consistent state.
+      },
+      { transaction: t }
+    );
+
+    /***************************This is final leaderboard optimisation**************/
+    //im creating new column called total expense in users table. whenever user adds a new expense
+    //im doing pre-calculating total expnese in total expense column only
+
+    // Retrieve the user's current total expense from the database
+    const currentUser = await userdb.findOne({
+      where: { id: req.user.id },
+      transaction: t,
     });
+    const currentTotalExpense = Number(currentUser.totalExpense);
+    // Calculate the updated total expense by adding the new expense to the current total expense
+    updatedTotalExpense = currentTotalExpense + Number(expens);
+
+    //update the totalExpense column of users table
+    await userdb.update(
+      {
+        totalExpense: updatedTotalExpense,
+      },
+      {
+        where: { id: req.user.id },
+        transaction: t,
+      }
+    );
+    //t.commit(): This method is used to commit (save) all the changes made during the transaction to the database.
+    //When this method is called, the transaction is completed, and the changes are permanently stored in the database.
+    await t.commit();
     res.json({ expensedata: data });
     console.log("res from addexpense method", data);
   } catch (error) {
+    //t.rollback(): This method is used to rollback (undo) all the changes made during the transaction.
+    //If an error occurs during the transaction or if there's a need to cancel the transaction for any reason, calling t.rollback()
+    //will undo all the changes made and leave the database in its original state before the transaction started.
+    await t.rollback();
     res.json({ Error: error });
     console.log("error from addexpense method", error);
   }
 };
-
 //1st step
 // the code calls user.findAll() to retrieve data.
 //It assumes that there is a user model or database table defined and connected.

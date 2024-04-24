@@ -21,6 +21,11 @@ const User = sequelize.define("users", {
     type: Sequelize.STRING,
     allowNull: false,
   },
+  ispremiumUser: Sequelize.BOOLEAN, //adding extra column and if user is premium true if not false
+  totalExpense: {
+    type: Sequelize.INTEGER,
+    defaultValue: 0,
+  },
 });
 
 // async function createUsersTable() {
