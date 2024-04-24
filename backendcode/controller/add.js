@@ -74,6 +74,7 @@ exports.addexpense = async (req, res, next) => {
     console.log("error from addexpense method", error);
   }
 };
+
 //1st step
 // the code calls user.findAll() to retrieve data.
 //It assumes that there is a user model or database table defined and connected.
@@ -104,22 +105,64 @@ exports.getexpense = async (req, res, next) => {
 };
 
 exports.deleteexpense = async (req, res) => {
+  //A transaction is a way to group multiple database operations together in a single logical unit.
+  const t = await sequelize.transaction();
   try {
     console.log("params id", req.params.id);
     if (!req.params.id) {
       throw new error("id is mandatory to delete");
     }
+
     const detailsId = req.params.id;
-    const data = await alldetails.destroy({
-      where: { id: detailsId, userId: req.user.id },
-    });
+    const expenseToDelete = await alldetails.findOne(
+      { where: { id: detailsId, userId: req.user.id } },
+      { transaction: t }
+    );
+
+    // Capture the expens value of the expense to be deleted
+    const expens = expenseToDelete.expens;
+
+    const data = await alldetails.destroy(
+      { where: { id: detailsId, userId: req.user.id } },
+      { transaction: t }
+    );
     //when we make an delete request url along with in headers we are passing token
     //backend will recieved token and in the middleware we are dcrypting the token so we will get userId
     //in expense.destroy where we also pass userId:req.user.id
     //i cannot delete others added expenses in the app,they also not able to delete my added expenses
     //if u want to check this means expense.finAll() keep it like this only so we can get all added expenses
+
+    /***************************This is final leaderboard optimisation**************/
+    //im creating new column called total expense in usertable. whenever user creates a new expense
+    //im doing pre-calculating total expnese in total expense column only
+    //findone method we comes to which user wants to delete an expense by req.user.id,from id:detailsId we will get id of the item we want to delete
+
+    // the code captures the expens value of the(expense-----line no:113) expense to be deleted before proceeding with the deletion.
+    //Then, after the deletion is successful, it retrieves the current user's totalExpense, subtracts the expens value, and updates the totalExpense column accordingly.
+    //This should now correctly deduct the deleted expense from the user's totalExpense in the userdb table.
+
+    // Retrieve the user's current total expense from the database
+    const currentUser = await userdb.findOne({
+      where: { id: req.user.id },
+      transaction: t,
+    });
+    const currentTotalExpense = Number(currentUser.totalExpense);
+    // Calculate the updated total expense by adding the new expense to the current total expense
+    updatedTotalExpense = currentTotalExpense - Number(expens);
+
+    await userdb.update(
+      {
+        totalExpense: updatedTotalExpense,
+      },
+      {
+        where: { id: req.user.id },
+        transaction: t,
+      }
+    );
+    await t.commit();
     res.json({ deleted: data });
   } catch (error) {
+    await t.rollback();
     res.json({ Error: error });
     console.log("error from delete expense method", error);
   }
