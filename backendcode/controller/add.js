@@ -50,9 +50,7 @@ exports.addexpense = async (req, res, next) => {
 
 exports.getexpense = async (req, res, next) => {
   try {
-    const data = await alldetails.findAll({ where: { userId: req.user.id } });
-    //..shows only logged user data.do not shows all
-    //{where:{userId:req.user.id}}
+    const data = await alldetails.findAll({ where: { userId: req.user.id } }); //{where:{userId:req.user.id}}
     //when we make an get request url along with in headers we are passing token
     //backend will recieves token and in the middleware we are dcrypting the token so we will get userId
     //from the userId backend will comes to know that who's loggedin and backend get the respective user's expense from expense table
